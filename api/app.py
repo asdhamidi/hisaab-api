@@ -128,7 +128,7 @@ def generate_code():
 @app.route('/entries', methods=['GET'])
 @token_required
 def get_entries(current_user):
-    entries = list(entries_collection.find({}, {'_id': 1, 'date': 1, 'items': 1, 'price': 1, 'paid_by': 1, 'notes': 1, 'owed_all': 1, 'owed_by': 1, 'updated_at': 1, 'previous_versions': 1 }).sort({'date': -1}))
+    entries = list(entries_collection.find({}, {'_id': 1, 'date': 1, 'items': 1, 'price': 1, 'paid_by': 1, 'notes': 1, 'owed_all': 1, 'owed_by': 1, 'updated_at': 1, 'created_at': 1, 'previous_versions': 1 }).sort({'date': -1}))
     for entry in entries:
         entry['_id'] = str(entry['_id']) 
     return jsonify(entries)
@@ -247,6 +247,7 @@ def create_entry(current_user):
         "notes": entry_data.get("notes"),
         "updated_at": "",
         "previous_versions": [],
+        "created_at": datetime.datetime.now().strftime("%-I:%M %p - %-d/%-m/%-y"),  # Store the username of the creator
         "created_by": current_user  # Store the username of the creator
     }
 
@@ -286,6 +287,7 @@ def update_entry(current_user, id):
         "owed_by": entry.get("owed_by", []),
         "notes": entry.get("notes", ""),
         "updated_at": entry.get("updated_at", ""),
+        "created_at": entry.get("created_at", ""),
         "created_by": entry.get("created_by", "")
     })
 
@@ -303,6 +305,7 @@ def update_entry(current_user, id):
         "owed_all": entry_data.get("owed_all"),
         "notes": entry_data.get("notes"),
         "owed_by": entry_data.get("owed_by"),
+        "created_at": entry_data.get("created_at"),
         "previous_versions": previous_versions
     }
 

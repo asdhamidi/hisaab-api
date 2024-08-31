@@ -1,76 +1,78 @@
 # Hisaab API
 
-**Hisaab API** is a backend service for managing shared expenses. Built with Flask, MongoDB, and JWT-based authentication, it allows users to create, retrieve, update, and delete expense entries while keeping track of who owes whom. The API also includes user registration, login, and registration code generation features.
+**Hisaab API** is a backend service designed to manage shared expenses, built using Flask, MongoDB, and JWT-based authentication. This API enables users to manage their expenses by allowing them to create, retrieve, update, and delete expense entries. It also tracks who owes whom and supports user registration, login, and registration code generation.
 
-## Features
+## Key Features
 
-- **User Authentication**: Register, login, and secure routes using JWT tokens.
-- **Expense Management**: Create, view, update, and delete expense entries.
-- **Access Control**: Restrict update and delete operations to the user who created the entry.
-- **Registration Codes**: Generate and validate registration codes for user sign-up.
-- **Cross-Origin Resource Sharing (CORS)**: Enabled for all routes.
+- **User Authentication**: Allows user registration, login, and secure access to routes using JWT tokens.
+- **Expense Management**: Supports operations to create, view, update, and delete expense entries.
+- **Access Control**: Ensures that only the user who created an expense entry can update or delete it.
+- **Registration Codes**: Provides functionality to generate and validate registration codes for user sign-up.
+- **Cross-Origin Resource Sharing (CORS)**: CORS is enabled for all routes to support cross-origin requests.
 
-## Installation
+## Getting Started
 
 ### Prerequisites
 
-- Python 3.7+
+To run the Hisaab API, you will need:
+
+- Python 3.7 or higher
 - MongoDB
-- Pipenv or virtualenv (optional but recommended for managing dependencies)
+- Pipenv or virtualenv (recommended for managing dependencies)
 
-### Setup & Installation
+### Installation
 
-1. Clone the repository:
-    ```bash
-    git clone https://github.com/asdhamidi/hisaab-api.git
-    ```
+1. **Clone the Repository:**
+   ```bash
+   git clone https://github.com/asdhamidi/hisaab-api.git
+   ```
 
-2. Navigate to the project directory:
-    ```bash
-    cd hisaab-api
-    ```
+2. **Navigate to the Project Directory:**
+   ```bash
+   cd hisaab-api
+   ```
 
-3. Install the required packages:
-    ```bash
-    pip install -r requirements.txt
-    ```
+3. **Install Required Packages:**
+   ```bash
+   pip install -r requirements.txt
+   ```
 
-## Usage
+### Running the Application
 
-1. Start the Flask server:
-    ```bash
-    cd api/
-    flask run
-    ```
+1. **Start the Flask Server:**
+   ```bash
+   cd api/
+   flask run
+   ```
 
-2. The server will run on `http://127.0.0.1:5000/`. You can use tools like Postman or curl to interact with the API endpoints.
+2. The server will start on `http://127.0.0.1:5000/`. You can use tools like Postman or `curl` to interact with the API.
 
-## API Endpoints
+## API Overview
 
 ### Public Endpoints
 
-- **`GET /`**: Welcome message.
-- **`POST /register`**: Register a new user.
-- **`POST /login`**: User login and JWT token generation.
+- **`GET /`**: Returns a welcome message.
+- **`POST /register`**: Registers a new user.
+- **`POST /login`**: Authenticates a user and generates a JWT token.
 
-### Protected Endpoints
+### Protected Endpoints (Require JWT Token)
 
-- **`GET /entries`**: Retrieve all expense entries.
-- **`GET /entries/<id>`**: Retrieve a specific expense entry by ID.
-- **`POST /entries`**: Create a new expense entry (requires JWT token).
-- **`PUT /entries/<id>`**: Update an existing expense entry (requires JWT token and ownership).
-- **`DELETE /entries/<id>`**: Delete an existing expense entry (requires JWT token and ownership).
-- **`POST /generate_code`**: Generate a registration code (requires JWT token).
-- **`POST /stats/daily`**: Get daily expense statistics for a specified month (requires month parameter).
-- **`POST /stats/daily_person`**: Get daily expense statistics grouped by person for a specified month (requires month parameter).
-- **`GET /clear/month`**: Clear all entries for the current month (requires JWT token).
-- **`GET /users`**: Retrieve all registered usernames.
+- **`GET /entries`**: Fetches all expense entries.
+- **`GET /entries/<id>`**: Fetches a specific expense entry by its ID.
+- **`POST /entries`**: Creates a new expense entry.
+- **`PUT /entries/<id>`**: Updates an existing expense entry, accessible only to the entry creator.
+- **`DELETE /entries/<id>`**: Deletes an existing expense entry, accessible only to the entry creator.
+- **`POST /generate_code`**: Generates a registration code for user sign-up.
+- **`POST /stats/daily`**: Fetches daily expense statistics for a specified month.
+- **`POST /stats/daily_person`**: Fetches daily expense statistics grouped by person for a specified month.
+- **`GET /clear/month`**: Clears all entries for the current month.
+- **`GET /users`**: Retrieves all registered usernames.
 
 ### Authentication
 
-JWT tokens are required for accessing protected routes. Include the token in the `Authorization` header as `Bearer <your_token>`.
+JWT tokens are required for accessing protected routes. Include the JWT token in the `Authorization` header as `Bearer <your_token>`.
 
-## Usage Example
+## Example API Requests
 
 ### Register a New User
 
@@ -84,7 +86,7 @@ curl -X POST http://127.0.0.1:5000/register \
 }'
 ```
 
-### Login
+### Login and Obtain JWT Token
 
 ```bash
 curl -X POST http://127.0.0.1:5000/login \
@@ -95,7 +97,7 @@ curl -X POST http://127.0.0.1:5000/login \
 }'
 ```
 
-### Create a New Entry
+### Create a New Expense Entry
 
 ```bash
 curl -X POST http://127.0.0.1:5000/entries \
@@ -110,7 +112,7 @@ curl -X POST http://127.0.0.1:5000/entries \
 }'
 ```
 
-### Get Daily Stats for a Month
+### Get Daily Expense Stats for a Month
 
 ```bash
 curl -X POST http://127.0.0.1:5000/stats/daily \
@@ -121,7 +123,7 @@ curl -X POST http://127.0.0.1:5000/stats/daily \
 }'
 ```
 
-### Get Daily Stats Grouped by Person for a Month
+### Get Daily Expense Stats Grouped by Person for a Month
 
 ```bash
 curl -X POST http://127.0.0.1:5000/stats/daily_person \
@@ -134,12 +136,4 @@ curl -X POST http://127.0.0.1:5000/stats/daily_person \
 
 ## License
 
-This project is licensed under... well, no specific license. Feel free to use it however you like. Consider it public domain—use it, modify it, share it, or just ignore it.
-
----
-
-### Key Changes Made in README
-
-- **Updated Protected Endpoints**: Added new endpoints for daily stats and grouped stats (`/stats/daily` and `/stats/daily_person`).
-- **Example Usage Section**: Added examples for the new `POST /stats/daily` and `POST /stats/daily_person` endpoints to demonstrate how to use them.
-- **Protected Endpoints Summary**: Adjusted the list to reflect the new methods and their requirements.
+The Hisaab API is released into the public domain. You are free to use, modify, distribute, or simply ignore it as you see fit.
