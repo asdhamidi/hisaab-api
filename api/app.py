@@ -133,37 +133,31 @@ def get_entries(current_user):
         entry['_id'] = str(entry['_id']) 
     return jsonify(entries)
 
-@app.route('/stats/daily_person', methods=['POST'])
+@app.route('/stats/daily_person/<string:month>', methods=['GET'])
 @token_required
-def daily_stats_person():
-    data = request.get_json()
-    month = data.get('month')
-
+def daily_stats_person(user, month):
     if not month:
         return jsonify({"error": "Month is required"}), 400
 
     pipeline = [
         {
             '$match': {
-                'date': { '$regex': f'^{month}' }
+                'date': { '$regex': f'^\\d{{2}}/{month}/\\d{{2}}' }  # Matches dates in DD/MM/YY format with the specified MM
             }
         },
         {
             '$addFields': {
-                'price': { '$toDouble': '$price' }
+                'price': {'$toDouble': '$price'}  # Convert price to double for sum calculation
             }
         },
         {
             '$group': {
-                '_id': {
-                    'date': '$date',          # Group by `date`
-                    'paid_by': '$paid_by'     # and `paid_by`
-                },
-                'total_price': { '$sum': '$price' }  # Sum the `price` field
+                '_id': '$paid_by',                    # Group by date
+                'total_price': {'$sum': '$price'}  # Sum the price for each date
             }
         },
         {
-            '$sort': { '_id.date': 1, '_id.paid_by': 1 }
+            '$sort': {'_id': -1}  # Sort by date in descending order
         }
     ]
 
@@ -171,19 +165,18 @@ def daily_stats_person():
 
     return jsonify(aggregated_results)
 
-@app.route('/stats/daily', methods=['POST'])
+@app.route('/stats/daily/<string:month>', methods=['GET'])
 @token_required
-def daily_stats():
-    data = request.get_json()
-    month = data.get('month')
+def daily_stats(user, month):
+    month = int(month)
+    if not month or not (1 <= month <= 12):
+        return jsonify({"error": "Month is required and should be between 1 and 12"}), 400
 
-    if not month:
-        return jsonify({"error": "Month is required"}), 400
-
+    month_str = f'{month}'  # Ensure month is always two digits (e.g., 1 becomes '01')
     pipeline = [
         {
             '$match': {
-                'date': { '$regex': f'^{month}' }
+                'date': { '$regex': f'^\\d{{2}}/{month_str}/\\d{{2}}' }  # Matches dates in DD/MM/YY format with the specified MM
             }
         },
         {
@@ -202,13 +195,16 @@ def daily_stats():
         }
     ]
 
+    # Execute the aggregation pipeline on the collection
     aggregated_data = list(entries_collection.aggregate(pipeline))
 
+    # Convert ObjectId to string for JSON serialization
     for entry in aggregated_data:
         if '_id' in entry:
             entry['_id'] = str(entry['_id'])
 
     return jsonify(aggregated_data)
+
 
 @app.route('/users', methods=['GET'])
 @token_required
@@ -297,7 +293,7 @@ def update_entry(current_user, id):
 
     # Prepare the updated entry data
     updated_entry = {
-        "updated_at": datetime.datetime.now().strftime("%-d/%-m/%-y"),
+        "updated_at": datetime.datetime.now().strftime("%-I:%M %p - %-d/%-m/%-y"),
         "items": entry_data.get("items"),
         "paid_by": entry_data.get("paid_by"),
         "date": new_date,
