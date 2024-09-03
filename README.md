@@ -1,139 +1,138 @@
-# Hisaab API
+## Hisaab API
 
-**Hisaab API** is a backend service designed to manage shared expenses, built using Flask, MongoDB, and JWT-based authentication. This API enables users to manage their expenses by allowing them to create, retrieve, update, and delete expense entries. It also tracks who owes whom and supports user registration, login, and registration code generation.
+### Overview
 
-## Key Features
+The **Hisaab API** is a backend service for the Hisaab web application, built using Flask and MongoDB. This API allows users to manage entries related to shared expenses, authenticate users, and perform various CRUD operations on the data stored in a MongoDB database. It is designed to support a frontend React application that tracks expenses and calculates amounts owed among flatmates.
 
-- **User Authentication**: Allows user registration, login, and secure access to routes using JWT tokens.
-- **Expense Management**: Supports operations to create, view, update, and delete expense entries.
-- **Access Control**: Ensures that only the user who created an expense entry can update or delete it.
-- **Registration Codes**: Provides functionality to generate and validate registration codes for user sign-up.
-- **Cross-Origin Resource Sharing (CORS)**: CORS is enabled for all routes to support cross-origin requests.
+### Table of Contents
 
-## Getting Started
-
-### Prerequisites
-
-To run the Hisaab API, you will need:
-
-- Python 3.7 or higher
-- MongoDB
-- Pipenv or virtualenv (recommended for managing dependencies)
+- [Installation](#installation)
+- [Environment Setup](#environment-setup)
+- [Usage](#usage)
+- [API Endpoints](#api-endpoints)
+- [Authentication](#authentication)
+- [License](#license)
 
 ### Installation
 
-1. **Clone the Repository:**
-   ```bash
-   git clone https://github.com/asdhamidi/hisaab-api.git
-   ```
+1. **Clone the repository:**
 
-2. **Navigate to the Project Directory:**
-   ```bash
-   cd hisaab-api
-   ```
+    ```bash
+    git clone https://github.com/asdhamidi/hisaab-api.git
+    cd hisaab-api
+    ```
 
-3. **Install Required Packages:**
-   ```bash
-   pip install -r requirements.txt
-   ```
+2. **Create and activate a virtual environment:**
 
-### Running the Application
+    ```bash
+    python3 -m venv venv
+    source venv/bin/activate   # On Windows use `venv\Scripts\activate`
+    ```
 
-1. **Start the Flask Server:**
-   ```bash
-   cd api/
-   flask run
-   ```
+3. **Install the dependencies:**
 
-2. The server will start on `http://127.0.0.1:5000/`. You can use tools like Postman or `curl` to interact with the API.
+    ```bash
+    pip install -r requirements.txt
+    ```
 
-## API Overview
+4. **Run the Flask application:**
 
-### Public Endpoints
+    ```bash
+    python app.py
+    ```
 
-- **`GET /`**: Returns a welcome message.
-- **`POST /register`**: Registers a new user.
-- **`POST /login`**: Authenticates a user and generates a JWT token.
+### Environment Setup
 
-### Protected Endpoints (Require JWT Token)
+Create a `.env` file in the root directory of your project to store the environment variables required for the application. Below is an example of the required environment variables:
 
-- **`GET /entries`**: Fetches all expense entries.
-- **`GET /entries/<id>`**: Fetches a specific expense entry by its ID.
-- **`POST /entries`**: Creates a new expense entry.
-- **`PUT /entries/<id>`**: Updates an existing expense entry, accessible only to the entry creator.
-- **`DELETE /entries/<id>`**: Deletes an existing expense entry, accessible only to the entry creator.
-- **`POST /generate_code`**: Generates a registration code for user sign-up.
-- **`POST /stats/daily`**: Fetches daily expense statistics for a specified month.
-- **`POST /stats/daily_person`**: Fetches daily expense statistics grouped by person for a specified month.
-- **`GET /clear/month`**: Clears all entries for the current month.
-- **`GET /users`**: Retrieves all registered usernames.
+```
+MONGODB_URI=mongodb+srv://<username>:<password>@cluster0.mongodb.net/?retryWrites=true&w=majority
+BLOG_DB=hisaab_db
+JWT_SECRET=your_jwt_secret_key
+```
+
+Make sure to replace `<username>`, `<password>`, and `your_jwt_secret_key` with actual values.
+
+### Usage
+
+1. **Start the server** by running:
+
+    ```bash
+    flask run
+    ```
+
+2. **Base URL** for the API (local development):
+
+    ```
+    http://127.0.0.1:5000/
+    ```
+
+### API Endpoints
+
+The following is a list of available endpoints for the **Hisaab API**:
+
+- **Home Endpoint**
+  - `GET /`
+  - Returns a welcome message and a link to the full documentation.
+
+- **User Authentication**
+  - `POST /register`
+    - Registers a new user.
+    - Request Body: `{ "username": "<username>", "password": "<password>", "register_code": "<register_code>" }`
+  - `POST /login`
+    - Authenticates a user and returns a JWT token.
+    - Request Body: `{ "username": "<username>", "password": "<password>" }`
+
+- **Code Management**
+  - `POST /generate_code`
+    - Generates a new registration code.
+    - **Protected**: Requires valid JWT token in the `Authorization` header.
+
+- **Entries Management**
+  - `GET /entries`
+    - Retrieves all entries.
+    - **Protected**: Requires valid JWT token in the `Authorization` header.
+  - `POST /entries`
+    - Creates a new entry.
+    - **Protected**: Requires valid JWT token in the `Authorization` header.
+    - Request Body: `{ "items": "<item_name>", "price": <price>, "owed_all": <bool>, "owed_by": [<list_of_users>], "notes": "<notes>" }`
+  - `GET /entries/<id>`
+    - Retrieves a specific entry by ID.
+    - **Protected**: Requires valid JWT token in the `Authorization` header.
+  - `PUT /entries/<id>`
+    - Updates an existing entry.
+    - **Protected**: Requires valid JWT token in the `Authorization` header.
+    - Request Body: Same as POST `/entries`.
+  - `DELETE /entries/<id>`
+    - Deletes an entry.
+    - **Protected**: Requires valid JWT token in the `Authorization` header.
+
+- **Activity Management**
+  - `GET /activities/<month>`
+    - Retrieves all activities for a specific month.
+    - **Protected**: Requires valid JWT token in the `Authorization` header.
+
+- **Statistics**
+  - `GET /stats/daily_person/<month>`
+    - Retrieves daily statistics by person for a given month.
+    - **Protected**: Requires valid JWT token in the `Authorization` header.
+  - `GET /stats/daily/<month>`
+    - Retrieves daily statistics for all entries in a given month.
+    - **Protected**: Requires valid JWT token in the `Authorization` header.
+
+- **User Management**
+  - `GET /users`
+    - Retrieves a list of all registered users.
+    - **Protected**: Requires valid JWT token in the `Authorization` header.
 
 ### Authentication
 
-JWT tokens are required for accessing protected routes. Include the JWT token in the `Authorization` header as `Bearer <your_token>`.
+This API uses JWT (JSON Web Token) for authentication. After a successful login, a token is returned to the user, which should be included in the `Authorization` header for subsequent requests that require authentication. Example:
 
-## Example API Requests
-
-### Register a New User
-
-```bash
-curl -X POST http://127.0.0.1:5000/register \
--H "Content-Type: application/json" \
--d '{
-    "username": "john_doe",
-    "password": "secure_password",
-    "register_code": "123456"
-}'
+```
+Authorization: Bearer <your_token_here>
 ```
 
-### Login and Obtain JWT Token
+### License
 
-```bash
-curl -X POST http://127.0.0.1:5000/login \
--H "Content-Type: application/json" \
--d '{
-    "username": "john_doe",
-    "password": "secure_password"
-}'
-```
-
-### Create a New Expense Entry
-
-```bash
-curl -X POST http://127.0.0.1:5000/entries \
--H "Content-Type: application/json" \
--H "Authorization: Bearer <your_token>" \
--d '{
-    "items": ["Dinner", "Drinks"],
-    "price": 150,
-    "owed_all": false,
-    "owed_by": {"user1", "user2"},
-    "notes": "Team outing"
-}'
-```
-
-### Get Daily Expense Stats for a Month
-
-```bash
-curl -X POST http://127.0.0.1:5000/stats/daily \
--H "Content-Type: application/json" \
--H "Authorization: Bearer <your_token>" \
--d '{
-    "month": "8/24"
-}'
-```
-
-### Get Daily Expense Stats Grouped by Person for a Month
-
-```bash
-curl -X POST http://127.0.0.1:5000/stats/daily_person \
--H "Content-Type: application/json" \
--H "Authorization: Bearer <your_token>" \
--d '{
-    "month": "8/24"
-}'
-```
-
-## License
-
-The Hisaab API is released into the public domain. You are free to use, modify, distribute, or simply ignore it as you see fit.
+This project is licensed under... well, no specific license. Feel free to use it however you like. Consider it public domain—use it, modify it, share it, or just ignore it.
