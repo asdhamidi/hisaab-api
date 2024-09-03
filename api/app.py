@@ -29,6 +29,7 @@ db = client[blog_db_name]
 entries_collection = db['entries']
 users_collection = db['users']
 codes_collection = db['codes']
+activities_collection = db['activities']
 
 # Home route.
 @app.route('/')
@@ -37,7 +38,7 @@ def home():
     Welcome to Hisaab API!
 
     For full documentation and usage details, please visit:
-    https://github.com/asdhamidi/
+    https://github.com/asdhamidi/hisaab-api
 
     Happy trails!
     """
@@ -128,10 +129,20 @@ def generate_code():
 @app.route('/entries', methods=['GET'])
 @token_required
 def get_entries(current_user):
+    print(current_user+" retrieved entries.")
     entries = list(entries_collection.find({}, {'_id': 1, 'date': 1, 'items': 1, 'price': 1, 'paid_by': 1, 'notes': 1, 'owed_all': 1, 'owed_by': 1, 'updated_at': 1, 'created_at': 1, 'previous_versions': 1 }).sort({'date': -1}))
     for entry in entries:
         entry['_id'] = str(entry['_id']) 
     return jsonify(entries)
+
+@app.route('/activities/<string:month>', methods=['GET'])
+@token_required
+def get_activities(current_user, month):
+    print(current_user+" retrieved activities.")
+    activities = list(activities_collection.find({'date': { '$regex': f'^\\d{{1,2}}/{month}/\\d{{2}}' }}, {'_id': 1, "user": 1, 'activity': 1, 'created_at': 1 }).sort({'date': -1}))
+    for activity in activities:
+        activity['_id'] = str(activity['_id']) 
+    return jsonify(activities)
 
 @app.route('/stats/daily_person/<string:month>', methods=['GET'])
 @token_required
@@ -142,22 +153,22 @@ def daily_stats_person(user, month):
     pipeline = [
         {
             '$match': {
-                'date': { '$regex': f'^\\d{{2}}/{month}/\\d{{2}}' }  # Matches dates in DD/MM/YY format with the specified MM
+                'date': { '$regex': f'^\\d{{1,2}}/{month}/\\d{{2}}' } 
             }
         },
         {
             '$addFields': {
-                'price': {'$toDouble': '$price'}  # Convert price to double for sum calculation
+                'price': {'$toDouble': '$price'}  
             }
         },
         {
             '$group': {
-                '_id': '$paid_by',                    # Group by date
-                'total_price': {'$sum': '$price'}  # Sum the price for each date
+                '_id': '$paid_by',                    
+                'total_price': {'$sum': '$price'}  
             }
         },
         {
-            '$sort': {'_id': -1}  # Sort by date in descending order
+            '$sort': {'_id': -1}  
         }
     ]
 
@@ -172,26 +183,26 @@ def daily_stats(user, month):
     if not month or not (1 <= month <= 12):
         return jsonify({"error": "Month is required and should be between 1 and 12"}), 400
 
-    month_str = f'{month}'  # Ensure month is always two digits (e.g., 1 becomes '01')
+    month_str = f'{month}'  
     pipeline = [
         {
             '$match': {
-                'date': { '$regex': f'^\\d{{2}}/{month_str}/\\d{{2}}' }  # Matches dates in DD/MM/YY format with the specified MM
+                'date': { '$regex': f'^\\d{{1,2}}/{month_str}/\\d{{2}}' }  
             }
         },
         {
             '$addFields': {
-                'price': {'$toDouble': '$price'}  # Convert price to double for sum calculation
+                'price': {'$toDouble': '$price'} 
             }
         },
         {
             '$group': {
-                '_id': '$date',                    # Group by date
-                'total_price': {'$sum': '$price'}  # Sum the price for each date
+                '_id': '$date',                    
+                'total_price': {'$sum': '$price'}  
             }
         },
         {
-            '$sort': {'_id': -1}  # Sort by date in descending order
+            '$sort': {'_id': -1}  
         }
     ]
 
@@ -248,6 +259,14 @@ def create_entry(current_user):
     }
 
     entries_collection.insert_one(new_entry)
+    activity = {
+        "_id": ObjectId(),
+        "user": current_user,
+        "date": datetime.datetime.now().strftime("%-d/%-m/%-y"),
+        "activity": "inserted a new entry for "+entry_data.get("items")+" at "+new_entry["created_at"],
+        "created_at": new_entry["created_at"]
+    }
+    activities_collection.insert_one(activity)
     new_entry["_id"] = str(new_entry["_id"])
     
     print(current_user + " made an entry "+str(new_entry))
@@ -307,6 +326,14 @@ def update_entry(current_user, id):
 
     result = entries_collection.update_one({"_id": entry_id}, {"$set": updated_entry})
     print(current_user, "updated the entry", entry)
+    activity = {
+        "_id": ObjectId(),
+        "user": current_user,
+        "date": datetime.datetime.now().strftime("%-d/%-m/%-y"),
+        "activity": "updated entry for "+entry_data.get("items")+" at "+updated_entry["created_at"],
+        "created_at": updated_entry["created_at"]
+    }
+    activities_collection.insert_one(activity)
 
     if result.matched_count == 0:
         return jsonify({"message": "No entry updated, it may not exist"}), 404
@@ -328,6 +355,14 @@ def delete_entry(current_user, id):
         return jsonify({"message": "You are not authorized to delete this entry"}), 403
 
     result = entries_collection.delete_one({"_id": entry_id})
+    activity = {
+        "_id": ObjectId(),
+        "user": current_user,
+        "date": datetime.datetime.now().strftime("%-d/%-m/%-y"),
+        "activity": "deleted entry for "+entry.get("items")+" at "+datetime.datetime.now().strftime("%-I:%M %p - %-d/%-m/%-y"),
+        "created_at": datetime.datetime.now().strftime("%-I:%M %p - %-d/%-m/%-y")
+    }
+    activities_collection.insert_one(activity)
     
     if result.deleted_count > 0:
         return jsonify({"message": "Entry deleted successfully"})
