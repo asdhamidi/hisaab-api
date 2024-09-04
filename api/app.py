@@ -263,7 +263,7 @@ def create_entry(current_user):
         "_id": ObjectId(),
         "user": current_user,
         "date": datetime.datetime.now().strftime("%-d/%-m/%-y"),
-        "activity": "inserted a new entry for "+entry_data.get("items")+" at "+new_entry["created_at"],
+        "activity": "created a new entry for "+entry_data.get("items")+" at "+new_entry["created_at"],
         "created_at": new_entry["created_at"]
     }
     activities_collection.insert_one(activity)
