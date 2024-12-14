@@ -3,7 +3,7 @@ from bson.objectid import ObjectId
 from pymongo import MongoClient
 from dotenv import load_dotenv
 from functools import wraps
-from flask_cors import CORS 
+from flask_cors import CORS
 import datetime
 import bcrypt
 import random
@@ -18,14 +18,14 @@ CORS(app, resources={r"/*": {"origins": "*"}})
 
 mongodb_uri = os.getenv("MONGODB_URI")
 blog_db_name = os.getenv('BLOG_DB')
-jwt_secret = os.getenv("JWT_SECRET") 
+jwt_secret = os.getenv("JWT_SECRET")
 
 if not mongodb_uri or not blog_db_name:
     raise ValueError("MONGODB_URI and BLOG_DB must be set in the environment variables.")
 
 # Connect to MongoDB
 client = MongoClient(mongodb_uri)
-db = client[blog_db_name] 
+db = client[blog_db_name]
 entries_collection = db['entries']
 users_collection = db['users']
 codes_collection = db['codes']
@@ -59,7 +59,7 @@ def token_required(f):
             return jsonify({"message": "Token has expired!"}), 401
         except jwt.InvalidTokenError:
             return jsonify({"message": "Invalid token!"}), 401
-        
+
         return f(current_user, *args, **kwargs)
     return decorator
 
@@ -70,25 +70,26 @@ def register():
     username = user_data.get("username")
     password = user_data.get("password")
     register_code = user_data.get("register_code")
-    
+
     if not username or not password or not register_code:
         return jsonify({"message": "Username, password, and registration code are required"}), 400
 
     if users_collection.find_one({"username": username}):
         return jsonify({"message": "Username already exists"}), 400
-
     # Verify the registration code
     code_entry = codes_collection.find_one({"code": register_code})
+
     if not code_entry:
         return jsonify({"message": "Invalid registration code"}), 400
 
     # Hash the password and store the new user
     hashed_password = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt())
-    
+
     new_user = {
         "_id": ObjectId(),
         "username": username,
         "password": hashed_password,
+        "admin": false,
         "created_at": datetime.datetime.now().strftime("%-d/%-m/%-y %-I:%M %p")
     }
 
@@ -109,11 +110,21 @@ def login():
     if user and bcrypt.checkpw(password.encode('utf-8'), user["password"]):
         token = jwt.encode({"username": username}, jwt_secret, algorithm="HS256")
         print(username, " Logged in")
+        
+        activity = {
+            "_id": ObjectId(),
+            "user": username,
+            "date": datetime.datetime.now().strftime("%-d/%-m/%-y"),
+            "activity": "logged in",
+            "created_at": datetime.datetime.now().strftime("%-I:%M %p - %-d/%-m/%-y")
+        }
+        activities_collection.insert_one(activity)
         return jsonify({"message": "Login successful", "token": token}), 200
     else:
         return jsonify({"message": "Invalid username or password"}), 401
-    
 
+
+# Protected endpoints
 @app.route('/generate_code', methods=['POST'])
 @token_required
 def generate_code():
@@ -129,19 +140,145 @@ def generate_code():
 @app.route('/entries', methods=['GET'])
 @token_required
 def get_entries(current_user):
-    print(current_user+" retrieved entries.")
-    entries = list(entries_collection.find({}, {'_id': 1, 'date': 1, 'items': 1, 'price': 1, 'paid_by': 1, 'notes': 1, 'owed_all': 1, 'owed_by': 1, 'updated_at': 1, 'created_at': 1, 'previous_versions': 1 }).sort({'date': -1}))
+    entries = list(entries_collection.aggregate([
+    {
+        "$addFields": {
+            "dateParts": { 
+                "$split": ["$date", "/"]  # Split the date string into [day, month, year]
+            }
+        }
+    },
+    {
+        "$addFields": {
+            "convertedDate": {
+                "$dateFromString": {
+                    "dateString": {
+                        "$concat": [
+                            { "$arrayElemAt": ["$dateParts", 2] },  # Year
+                            "-",
+                            {
+                                "$cond": {  # Add zero padding for the month if necessary
+                                    "if": { "$lte": [{ "$strLenCP": { "$arrayElemAt": ["$dateParts", 1] } }, 1] },
+                                    "then": { "$concat": ["0", { "$arrayElemAt": ["$dateParts", 1] }] },
+                                    "else": { "$arrayElemAt": ["$dateParts", 1] }
+                                }
+                            },
+                            "-",
+                            {
+                                "$cond": {  # Add zero padding for the day if necessary
+                                    "if": { "$lte": [{ "$strLenCP": { "$arrayElemAt": ["$dateParts", 0] } }, 1] },
+                                    "then": { "$concat": ["0", { "$arrayElemAt": ["$dateParts", 0] }] },
+                                    "else": { "$arrayElemAt": ["$dateParts", 0] }
+                                }
+                            }
+                        ]
+                    },
+                    "format": "%Y-%m-%d"
+                }
+            }
+        }
+    },
+    {
+        "$sort": { "convertedDate": -1 }  # Sort by the converted date in descending order (latest to oldest)
+    },
+    {
+        "$project": {
+            "_id": 1,
+            "date": 1,
+            "items": 1,
+            "price": 1,
+            "paid_by": 1,
+            "notes": 1,
+            "owed_all": 1,
+            "owed_by": 1,
+            "updated_at": 1,
+            "created_at": 1,
+            "previous_versions": 1
+        }
+    }
+]))
+
     for entry in entries:
-        entry['_id'] = str(entry['_id']) 
+        entry['_id'] = str(entry['_id'])
+        
+    activity = {
+            "_id": ObjectId(),
+            "user": current_user,
+            "date": datetime.datetime.now().strftime("%-d/%-m/%-y"),
+            "activity": "opened Hisaab",
+            "created_at": datetime.datetime.now().strftime("%-I:%M %p - %-d/%-m/%-y")
+        }
+    activities_collection.insert_one(activity)
     return jsonify(entries)
 
 @app.route('/activities/<string:month>', methods=['GET'])
 @token_required
 def get_activities(current_user, month):
-    print(current_user+" retrieved activities.")
-    activities = list(activities_collection.find({'date': { '$regex': f'^\\d{{1,2}}/{month}/\\d{{2}}' }}, {'_id': 1, "user": 1, 'activity': 1, 'created_at': 1 }).sort({'date': -1}))
+    print(current_user + " retrieved activities.")
+    
+    # Ensure that the month is handled without needing zero-padding
+    activities = list(activities_collection.aggregate([
+        {
+            "$match": {
+                "date": { "$regex": f'^\\d{{1,2}}/{month}/\\d{{2}}' }  # Match activities for the given month
+            }
+        },
+        {
+            "$addFields": {
+                "dateParts": { 
+                    "$split": ["$date", "/"]  # Split the date string into [day, month, year]
+                }
+            }
+        },
+        {
+            "$addFields": {
+                "convertedDate": {
+                    "$dateFromString": {
+                        "dateString": {
+                            "$concat": [
+                                { "$arrayElemAt": ["$dateParts", 2] },  # Year
+                                "-",
+                                {
+                                    "$cond": {  # Add zero padding for the month if necessary
+                                        "if": { "$lte": [{ "$strLenCP": { "$arrayElemAt": ["$dateParts", 1] } }, 1] },
+                                        "then": { "$concat": ["0", { "$arrayElemAt": ["$dateParts", 1] }] },
+                                        "else": { "$arrayElemAt": ["$dateParts", 1] }
+                                    }
+                                },
+                                "-",
+                                {
+                                    "$cond": {  # Add zero padding for the day if necessary
+                                        "if": { "$lte": [{ "$strLenCP": { "$arrayElemAt": ["$dateParts", 0] } }, 1] },
+                                        "then": { "$concat": ["0", { "$arrayElemAt": ["$dateParts", 0] }] },
+                                        "else": { "$arrayElemAt": ["$dateParts", 0] }
+                                    }
+                                }
+                            ]
+                        },
+                        "format": "%Y-%m-%d"
+                    }
+                }
+            }
+        },
+        {
+            "$sort": { "convertedDate": -1 }  # Sort by the converted date in descending order (latest to oldest)
+        },
+        {
+            "$project": {
+                "_id": 1,
+                "user": 1,
+                "activity": 1,
+                "created_at": 1
+            }
+        }
+    ]))
+    
+    if users_collection.find_one({"username": current_user})["admin"] == False:
+        activities = [ac for ac in activities if ac["user"] != current_user]
+
     for activity in activities:
-        activity['_id'] = str(activity['_id']) 
+        activity['_id'] = str(activity['_id'])  # Convert ObjectId to string for JSON serialization
+
     return jsonify(activities)
 
 @app.route('/stats/daily_person/<string:month>', methods=['GET'])
@@ -153,22 +290,22 @@ def daily_stats_person(user, month):
     pipeline = [
         {
             '$match': {
-                'date': { '$regex': f'^\\d{{1,2}}/{month}/\\d{{2}}' } 
+                'date': { '$regex': f'^\\d{{1,2}}/{month}/\\d{{2}}' }
             }
         },
         {
             '$addFields': {
-                'price': {'$toDouble': '$price'}  
+                'price': {'$toDouble': '$price'}
             }
         },
         {
             '$group': {
-                '_id': '$paid_by',                    
-                'total_price': {'$sum': '$price'}  
+                '_id': '$paid_by',
+                'total_price': {'$sum': '$price'}
             }
         },
         {
-            '$sort': {'_id': -1}  
+            '$sort': {'_id': -1}
         }
     ]
 
@@ -183,26 +320,26 @@ def daily_stats(user, month):
     if not month or not (1 <= month <= 12):
         return jsonify({"error": "Month is required and should be between 1 and 12"}), 400
 
-    month_str = f'{month}'  
+    month_str = f'{month}'
     pipeline = [
         {
             '$match': {
-                'date': { '$regex': f'^\\d{{1,2}}/{month_str}/\\d{{2}}' }  
+                'date': { '$regex': f'^\\d{{1,2}}/{month_str}/\\d{{2}}' }
             }
         },
         {
             '$addFields': {
-                'price': {'$toDouble': '$price'} 
+                'price': {'$toDouble': '$price'}
             }
         },
         {
             '$group': {
-                '_id': '$date',                    
-                'total_price': {'$sum': '$price'}  
+                '_id': '$date',
+                'total_price': {'$sum': '$price'}
             }
         },
         {
-            '$sort': {'_id': -1}  
+            '$sort': {'_id': -1}
         }
     ]
 
@@ -219,7 +356,7 @@ def daily_stats(user, month):
 
 @app.route('/users', methods=['GET'])
 @token_required
-def get_users():
+def get_users(user):
     users = list(users_collection.find({}, {'username': 1}))
     users_list = []
     for entry in users:
@@ -230,14 +367,13 @@ def get_users():
 @token_required
 def get_entry_by_id(id):
     entry = entries_collection.find_one({'_id': ObjectId(id)}, {'_id': 1, 'date': 1, 'items': 1, 'price': 1, 'paid_by': 1, 'notes': 1, 'owed_all': 1, 'owed_by': 1, 'updated_at': 1 })
-    
+
     if entry:
         entry['_id'] = str(entry['_id'])
         return jsonify(entry)
     else:
         return jsonify({"message": "entry not found"}), 404
 
-# Protected endpoints
 @app.route('/entries', methods=['POST'])
 @token_required
 def create_entry(current_user):
@@ -263,12 +399,12 @@ def create_entry(current_user):
         "_id": ObjectId(),
         "user": current_user,
         "date": datetime.datetime.now().strftime("%-d/%-m/%-y"),
-        "activity": "created a new entry for "+entry_data.get("items")+" at "+new_entry["created_at"],
+        "activity": "created a new entry for "+entry_data.get("items"),
         "created_at": new_entry["created_at"]
     }
     activities_collection.insert_one(activity)
     new_entry["_id"] = str(new_entry["_id"])
-    
+
     print(current_user + " made an entry "+str(new_entry))
     return jsonify({"message": "Entry created successfully", "entry": new_entry}), 201
 
@@ -277,15 +413,15 @@ def create_entry(current_user):
 def update_entry(current_user, id):
     entry_id = ObjectId(id)
     entry = entries_collection.find_one({'_id': entry_id})
-    
+
     if not entry:
         return jsonify({"message": "Entry not found"}), 404
 
     if entry['created_by'] != current_user:
         return jsonify({"message": "You are not authorized to edit this entry"}), 403
-    
+
     entry_data = request.json
-    
+
     # Handle the previous_versions properly
     previous_versions = entry.get("previous_versions", [])
     if not previous_versions:
@@ -330,8 +466,8 @@ def update_entry(current_user, id):
         "_id": ObjectId(),
         "user": current_user,
         "date": datetime.datetime.now().strftime("%-d/%-m/%-y"),
-        "activity": "updated entry for "+entry_data.get("items")+" at "+updated_entry["created_at"],
-        "created_at": updated_entry["created_at"]
+        "activity": "updated entry for "+entry_data.get("items"),
+        "created_at": updated_entry["updated_at"]
     }
     activities_collection.insert_one(activity)
 
@@ -347,7 +483,7 @@ def update_entry(current_user, id):
 def delete_entry(current_user, id):
     entry_id = ObjectId(id)
     entry = entries_collection.find_one({'_id': entry_id})
-    
+
     if not entry:
         return jsonify({"message": "Entry not found"}), 404
 
@@ -355,15 +491,16 @@ def delete_entry(current_user, id):
         return jsonify({"message": "You are not authorized to delete this entry"}), 403
 
     result = entries_collection.delete_one({"_id": entry_id})
+
     activity = {
         "_id": ObjectId(),
         "user": current_user,
         "date": datetime.datetime.now().strftime("%-d/%-m/%-y"),
-        "activity": "deleted entry for "+entry.get("items")+" at "+datetime.datetime.now().strftime("%-I:%M %p - %-d/%-m/%-y"),
+        "activity": "deleted entry for "+entry.get("items"),
         "created_at": datetime.datetime.now().strftime("%-I:%M %p - %-d/%-m/%-y")
     }
     activities_collection.insert_one(activity)
-    
+
     if result.deleted_count > 0:
         return jsonify({"message": "Entry deleted successfully"})
     else:
@@ -374,7 +511,6 @@ def delete_entry(current_user, id):
 def clear(month):
     entries_collection.drop()
     return jsonify({"message": "Records cleared"}), 200
-
 
 if __name__ == '__main__':
     app.run(debug=True)
